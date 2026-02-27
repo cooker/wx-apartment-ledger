@@ -20,6 +20,11 @@ import com.wx.apartment.ledger.domain.sharedplace.SharedPlaceMeterRepository;
 import com.wx.apartment.ledger.domain.sharedplace.SharedPlaceRepository;
 import com.wx.apartment.ledger.domain.sharedplace.SharedPlaceTenantRepository;
 import com.wx.apartment.ledger.domain.sharedplace.SharedPlaceTenantShareRepository;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import com.wx.apartment.ledger.domain.tenant.Tenant;
 import com.wx.apartment.ledger.domain.tenant.TenantRepository;
 import com.wx.apartment.ledger.infrastructure.bill.BillHouseMapper;
@@ -121,6 +126,122 @@ public class BillApplicationService {
         return payments.stream()
                 .map(this::toPaymentDTO)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 导出指定账期的账单明细为 PDF，按租客姓名升序。
+     */
+    public byte[] exportMonthlyBillsPdf(Integer year, Integer month) {
+        LocalDate today = LocalDate.now();
+        int exportYear = (year != null ? year : today.getYear());
+        int exportMonth = (month != null ? month : today.getMonthValue());
+
+        List<Bill> bills = billRepository.findPage(null, exportYear, exportMonth, null, 0, 10000);
+        if (bills.isEmpty()) {
+            return new byte[0];
+        }
+
+        List<BillDetailDTO> dtos = bills.stream()
+                .map(this::toDetailDTO)
+                .sorted(Comparator.comparing(dto -> dto.getTenantName() == null ? "" : dto.getTenantName()))
+                .toList();
+
+        try (PDDocument document = new PDDocument()) {
+            for (BillDetailDTO dto : dtos) {
+                PDPage page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+
+                try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
+                    float margin = 40;
+                    float y = page.getMediaBox().getHeight() - margin;
+
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 14);
+                    cs.beginText();
+                    cs.newLineAtOffset(margin, y);
+                    cs.showText("租客账单明细");
+                    cs.endText();
+
+                    cs.setFont(PDType1Font.HELVETICA, 11);
+                    y -= 24;
+
+                    // 基本信息
+                    y = writeLine(cs, "租客: " + (dto.getTenantName() == null ? ("#" + dto.getTenantId()) : dto.getTenantName())
+                            + "   账期: " + dto.getBillYear() + "-" + String.format("%02d", dto.getBillMonth()), margin, y);
+                    y = writeLine(cs, "房租: " + amount(dto.getRentAmount())
+                            + " 元   水费: " + amount(dto.getWaterAmount())
+                            + " 元   电费: " + amount(dto.getElectricAmount()) + " 元", margin, y);
+                    y = writeLine(cs, "合计: " + amount(dto.getTotalAmount()) + " 元", margin, y - 4);
+
+                    // 房屋水电明细
+                    y -= 18;
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 11);
+                    y = writeLine(cs, "房屋水电明细:", margin, y);
+                    cs.setFont(PDType1Font.HELVETICA, 10);
+                    for (BillDetailDTO.BillHouseItemDTO hi : dto.getHouseItems()) {
+                        String line = String.format(
+                                "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
+                                hi.getHouseLabel(),
+                                usage(hi.getElectricUsage()),
+                                amount(hi.getElectricAmount()),
+                                usage(hi.getWaterUsage()),
+                                amount(hi.getWaterAmount())
+                        );
+                        y = writeLine(cs, line, margin, y);
+                        if (y < margin + 60) {
+                            break;
+                        }
+                    }
+
+                    // 公共场所水电明细
+                    y -= 12;
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 11);
+                    y = writeLine(cs, "公共场所水电明细:", margin, y);
+                    cs.setFont(PDType1Font.HELVETICA, 10);
+                    for (BillDetailDTO.BillSharedPlaceItemDTO si : dto.getSharedPlaceItems()) {
+                        String line = String.format(
+                                "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
+                                si.getSharedPlaceLabel(),
+                                usage(si.getElectricUsage()),
+                                amount(si.getElectricAmount()),
+                                usage(si.getWaterUsage()),
+                                amount(si.getWaterAmount())
+                        );
+                        y = writeLine(cs, line, margin, y);
+                        if (y < margin + 40) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            document.save(baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("导出账单PDF失败", e);
+        }
+    }
+
+    private float writeLine(PDPageContentStream cs, String text, float x, float y) throws java.io.IOException {
+        cs.beginText();
+        cs.newLineAtOffset(x, y);
+        cs.showText(text);
+        cs.endText();
+        return y - 14;
+    }
+
+    private String amount(BigDecimal value) {
+        if (value == null) {
+            return "0.00";
+        }
+        return value.setScale(2, BigDecimal.ROUND_HALF_UP).toPlainString();
+    }
+
+    private String usage(BigDecimal value) {
+        if (value == null) {
+            return "-";
+        }
+        return value.setScale(2, BigDecimal.ROUND_HALF_UP).toPlainString();
     }
 
     public Long receivePayment(BillPaymentCmd cmd) {

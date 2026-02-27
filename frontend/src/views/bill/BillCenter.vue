@@ -58,6 +58,9 @@
             <button class="secondary-button" type="button" @click="handleRegenerate">
               重新生成
             </button>
+            <button class="secondary-button" type="button" @click="handleExportPdf">
+              导出PDF
+            </button>
           </div>
         </div>
 
@@ -336,6 +339,7 @@ import {
   type BillPayment,
   type ChargeKind,
   type TenantDetail,
+  exportBillsPdf,
 } from '@/api';
 
 const bills = ref<BillDetail[]>([]);
@@ -612,6 +616,26 @@ async function saveSharedPlaceAdjust() {
     }));
   await adjustBillSharedPlaces(selectedBill.value.id, { items });
   await reload();
+}
+
+async function handleExportPdf() {
+  const params = {
+    tenantId: filters.tenantId || undefined,
+    billYear: filters.billYear || undefined,
+    billMonth: filters.billMonth || undefined,
+  };
+  const data = await exportBillsPdf(params);
+  const blob = new Blob([data as any], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const year = params.billYear ?? new Date().getFullYear();
+  const month = params.billMonth ?? new Date().getMonth() + 1;
+  a.href = url;
+  a.download = `账单明细-${year}-${String(month).padStart(2, '0')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 watch(

@@ -8,6 +8,9 @@ import com.wx.apartment.ledger.application.bill.dto.BillPaymentDTO;
 import com.wx.apartment.ledger.application.common.PageResult;
 import com.wx.apartment.ledger.application.bill.dto.BillSharedPlaceAdjustCmd;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -61,6 +64,18 @@ public class BillController {
     @PostMapping("/payments/{id}/delete")
     public void deletePayment(@PathVariable("id") Long id) {
         billApplicationService.deletePayment(id);
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export(Integer billYear, Integer billMonth) {
+        byte[] pdf = billApplicationService.exportMonthlyBillsPdf(billYear, billMonth);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        String filename = String.format("bills-%d-%02d.pdf",
+                billYear != null ? billYear : java.time.LocalDate.now().getYear(),
+                billMonth != null ? billMonth : java.time.LocalDate.now().getMonthValue());
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename);
+        return ResponseEntity.ok().headers(headers).body(pdf);
     }
 }
 

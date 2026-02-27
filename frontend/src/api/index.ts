@@ -511,3 +511,10 @@ export function regenerateBills(payload: BillRegeneratePayload) {
   return http.post<void>('/bills/regenerate', payload);
 }
 
+export function exportBillsPdf(params: BillPageParams) {
+  return http.get<ArrayBuffer>('/bills/export', {
+    params,
+    responseType: 'blob' as any,
+  });
+}
+
