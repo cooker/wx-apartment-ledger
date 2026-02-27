@@ -42,8 +42,8 @@
               <th>类型</th>
               <th>安装位置</th>
               <th>是否总表</th>
-              <th>本月用量</th>
-              <th>本月差异</th>
+              <th>上月用量</th>
+              <th>上月差异</th>
               <th>创建时间</th>
               <th>操作</th>
             </tr>
@@ -328,10 +328,14 @@ const pageNo = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
 
-// 当前月份用量值（key 为 meterId，value 为本月用量；null 表示未录入）
+// 上一月份用量值（key 为 meterId，value 为上月用量；null 表示未录入）
 const now = new Date();
-const currentYear = now.getFullYear();
-const currentMonth = now.getMonth() + 1;
+let currentYear = now.getFullYear();
+let currentMonth = now.getMonth(); // 0-11，先取上一个自然月
+if (currentMonth === 0) {
+  currentYear -= 1;
+  currentMonth = 12;
+}
 const thisMonthUsageMap = reactive<Record<number, number | null>>({});
 
 const editingId = ref<number | null>(null);

@@ -192,6 +192,15 @@
                 <td>{{ formatAmount(item.waterAmount) }}</td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="summary-row">
+                <td>合计</td>
+                <td>{{ houseElectricUsageTotal }}</td>
+                <td>{{ formatAmount(houseElectricAmountTotal) }}</td>
+                <td>{{ houseWaterUsageTotal }}</td>
+                <td>{{ formatAmount(houseWaterAmountTotal) }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -232,6 +241,15 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="summary-row">
+                <td>合计</td>
+                <td>{{ sharedElectricUsageTotal }}</td>
+                <td>{{ formatAmount(sharedElectricAmountTotal) }}</td>
+                <td>{{ sharedWaterUsageTotal }}</td>
+                <td>{{ formatAmount(sharedWaterAmountTotal) }}</td>
+              </tr>
+            </tfoot>
           </table>
           <div class="form-actions" style="margin-top: 8px">
             <button
@@ -369,6 +387,78 @@ const paymentForm = reactive({
   paymentAmount: undefined as number | undefined,
   paymentTime: '',
   paymentNote: '',
+});
+
+const houseElectricUsageTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.houseItems?.length) return 0;
+  return bill.houseItems.reduce(
+    (sum, item) => sum + (item.electricUsage || 0),
+    0,
+  );
+});
+
+const houseWaterUsageTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.houseItems?.length) return 0;
+  return bill.houseItems.reduce(
+    (sum, item) => sum + (item.waterUsage || 0),
+    0,
+  );
+});
+
+const houseElectricAmountTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.houseItems?.length) return 0;
+  return bill.houseItems.reduce(
+    (sum, item) => sum + (item.electricAmount || 0),
+    0,
+  );
+});
+
+const houseWaterAmountTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.houseItems?.length) return 0;
+  return bill.houseItems.reduce(
+    (sum, item) => sum + (item.waterAmount || 0),
+    0,
+  );
+});
+
+const sharedElectricUsageTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.sharedPlaceItems?.length) return 0;
+  return bill.sharedPlaceItems.reduce(
+    (sum, item) => sum + (item.electricUsage || 0),
+    0,
+  );
+});
+
+const sharedWaterUsageTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.sharedPlaceItems?.length) return 0;
+  return bill.sharedPlaceItems.reduce(
+    (sum, item) => sum + (item.waterUsage || 0),
+    0,
+  );
+});
+
+const sharedElectricAmountTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.sharedPlaceItems?.length) return 0;
+  return bill.sharedPlaceItems.reduce(
+    (sum, item) => sum + (item.electricAmount || 0),
+    0,
+  );
+});
+
+const sharedWaterAmountTotal = computed(() => {
+  const bill = selectedBill.value;
+  if (!bill?.sharedPlaceItems?.length) return 0;
+  return bill.sharedPlaceItems.reduce(
+    (sum, item) => sum + (item.waterAmount || 0),
+    0,
+  );
 });
 
 const waterUnitPrice = ref<number | null>(null);

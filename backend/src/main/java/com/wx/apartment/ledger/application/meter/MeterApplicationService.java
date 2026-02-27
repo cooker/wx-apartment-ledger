@@ -95,7 +95,7 @@ public class MeterApplicationService {
         long total = meterRepository.count(kind, keyword);
         List<Meter> list = meterRepository.findPage(kind, keyword, offset, pageSize);
 
-        // 计算当前月份总表与子表用量差异
+        // 计算上月总表与子表用量差异（用于列表展示“上月差异”）
         Map<Long, BigDecimal> diffMap = calculateCurrentMonthDiff(list);
 
         List<MeterDetailDTO> records = list.stream()
@@ -114,9 +114,11 @@ public class MeterApplicationService {
         if (meters == null || meters.isEmpty()) {
             return result;
         }
+        // 取上一个自然月
         LocalDate now = LocalDate.now();
-        int year = now.getYear();
-        int month = now.getMonthValue();
+        LocalDate lastMonth = now.minusMonths(1);
+        int year = lastMonth.getYear();
+        int month = lastMonth.getMonthValue();
         for (Meter meter : meters) {
             if (!meter.isMainMeter()) {
                 continue;

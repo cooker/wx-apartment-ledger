@@ -242,13 +242,15 @@ public class SharedPlaceApplicationService {
     }
 
     /**
-     * 计算本月水、电总用量并写入 DTO。
+     * 计算上月水、电总用量并写入 DTO（用于列表展示“上月用量”）。
      * 为避免复杂 SQL，这里直接按计量表逐个查询，公共场所数量通常有限，性能可接受。
      */
     private void fillCurrentMonthUsage(SharedPlaceDetailDTO dto, List<Long> meterIds) {
+        // 取上一个自然月
         LocalDate today = LocalDate.now();
-        int year = today.getYear();
-        int month = today.getMonthValue();
+        LocalDate lastMonth = today.minusMonths(1);
+        int year = lastMonth.getYear();
+        int month = lastMonth.getMonthValue();
         BigDecimal[] totals = calcUsageForYearMonth(meterIds, year, month);
         if (totals[0].compareTo(BigDecimal.ZERO) > 0) {
             dto.setElectricUsageThisMonth(totals[0]);

@@ -133,16 +133,18 @@ public class HouseApplicationService {
     }
 
     /**
-     * 计算本月水、电总用量并写入 DTO。
+     * 计算上月水、电总用量并写入 DTO（用于列表展示“上月用量”）。
      * 这里按计量表逐个查询，房屋数量通常有限，性能可接受。
      */
     private void fillCurrentMonthUsage(HouseDetailDTO dto, List<Long> meterIds) {
         if (meterIds == null || meterIds.isEmpty()) {
             return;
         }
+        // 取上一个自然月
         LocalDate today = LocalDate.now();
-        int year = today.getYear();
-        int month = today.getMonthValue();
+        LocalDate lastMonth = today.minusMonths(1);
+        int year = lastMonth.getYear();
+        int month = lastMonth.getMonthValue();
 
         BigDecimal electricTotal = BigDecimal.ZERO;
         BigDecimal waterTotal = BigDecimal.ZERO;
