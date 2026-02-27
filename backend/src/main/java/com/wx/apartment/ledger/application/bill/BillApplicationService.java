@@ -25,6 +25,7 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import com.wx.apartment.ledger.domain.tenant.Tenant;
 import com.wx.apartment.ledger.domain.tenant.TenantRepository;
 import com.wx.apartment.ledger.infrastructure.bill.BillHouseMapper;
@@ -147,6 +148,9 @@ public class BillApplicationService {
                 .toList();
 
         try (PDDocument document = new PDDocument()) {
+            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+            PDType1Font fontNormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+
             for (BillDetailDTO dto : dtos) {
                 PDPage page = new PDPage(PDRectangle.A4);
                 document.addPage(page);
@@ -155,13 +159,13 @@ public class BillApplicationService {
                     float margin = 40;
                     float y = page.getMediaBox().getHeight() - margin;
 
-                    cs.setFont(PDType1Font.HELVETICA_BOLD, 14);
+                    cs.setFont(fontBold, 14);
                     cs.beginText();
                     cs.newLineAtOffset(margin, y);
                     cs.showText("租客账单明细");
                     cs.endText();
 
-                    cs.setFont(PDType1Font.HELVETICA, 11);
+                    cs.setFont(fontNormal, 11);
                     y -= 24;
 
                     // 基本信息
@@ -174,9 +178,9 @@ public class BillApplicationService {
 
                     // 房屋水电明细
                     y -= 18;
-                    cs.setFont(PDType1Font.HELVETICA_BOLD, 11);
+                    cs.setFont(fontBold, 11);
                     y = writeLine(cs, "房屋水电明细:", margin, y);
-                    cs.setFont(PDType1Font.HELVETICA, 10);
+                    cs.setFont(fontNormal, 10);
                     for (BillDetailDTO.BillHouseItemDTO hi : dto.getHouseItems()) {
                         String line = String.format(
                                 "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
@@ -194,9 +198,9 @@ public class BillApplicationService {
 
                     // 公共场所水电明细
                     y -= 12;
-                    cs.setFont(PDType1Font.HELVETICA_BOLD, 11);
+                    cs.setFont(fontBold, 11);
                     y = writeLine(cs, "公共场所水电明细:", margin, y);
-                    cs.setFont(PDType1Font.HELVETICA, 10);
+                    cs.setFont(fontNormal, 10);
                     for (BillDetailDTO.BillSharedPlaceItemDTO si : dto.getSharedPlaceItems()) {
                         String line = String.format(
                                 "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
