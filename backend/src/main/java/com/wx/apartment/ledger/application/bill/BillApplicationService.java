@@ -24,8 +24,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import com.wx.apartment.ledger.domain.tenant.Tenant;
 import com.wx.apartment.ledger.domain.tenant.TenantRepository;
 import com.wx.apartment.ledger.infrastructure.bill.BillHouseMapper;
@@ -148,18 +147,45 @@ public class BillApplicationService {
                 .toList();
 
         try (PDDocument document = new PDDocument()) {
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font fontNormal = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            // 加载支持中文的 TrueType 字体：
+            // - 常规：宋体 SimSun（fonts/SimSun.ttf）
+            // - 加粗：黑体 SimHei（fonts/SimHei.ttf，若不存在则回退为宋体）
+            java.io.InputStream normalStream = getClass().getClassLoader()
+                    .getResourceAsStream("fonts/SimSun.ttf");
+            if (normalStream == null) {
+                throw new IllegalStateException("未找到中文字体文件：fonts/SimSun.ttf");
+            }
+            PDType0Font fontNormal = PDType0Font.load(document, normalStream, true);
 
-            for (BillDetailDTO dto : dtos) {
-                PDPage page = new PDPage(PDRectangle.A4);
-                document.addPage(page);
+            PDType0Font fontBold;
+            java.io.InputStream boldStream = getClass().getClassLoader()
+                    .getResourceAsStream("fonts/SimHei.ttf");
+            if (boldStream != null) {
+                fontBold = PDType0Font.load(document, boldStream, true);
+            } else {
+                // 若未提供黑体，则退回使用宋体作为“加粗”字体（视觉上差异不大）
+                fontBold = fontNormal;
+            }
 
-                try (PDPageContentStream cs = new PDPageContentStream(document, page)) {
-                    float margin = 40;
-                    float y = page.getMediaBox().getHeight() - margin;
+            float margin = 40;
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDPageContentStream cs = new PDPageContentStream(document, page);
+            float y = page.getMediaBox().getHeight() - margin;
 
-                    cs.setFont(fontBold, 14);
+            try {
+                for (BillDetailDTO dto : dtos) {
+                    // 如果剩余空间不足以放下一条账单的抬头和几行内容，则新起一页
+                    if (y < margin + 120) {
+                        cs.close();
+                        page = new PDPage(PDRectangle.A4);
+                        document.addPage(page);
+                        cs = new PDPageContentStream(document, page);
+                        y = page.getMediaBox().getHeight() - margin;
+                    }
+
+                    // 标题
+                    cs.setFont(fontNormal, 14);
                     cs.beginText();
                     cs.newLineAtOffset(margin, y);
                     cs.showText("租客账单明细");
@@ -168,9 +194,11 @@ public class BillApplicationService {
                     cs.setFont(fontNormal, 11);
                     y -= 24;
 
-                    // 基本信息
+                    // 基本信息（租客 + 账期 加粗显示，便于快速查找）
+                    cs.setFont(fontBold, 11);
                     y = writeLine(cs, "租客: " + (dto.getTenantName() == null ? ("#" + dto.getTenantId()) : dto.getTenantName())
                             + "   账期: " + dto.getBillYear() + "-" + String.format("%02d", dto.getBillMonth()), margin, y);
+                    cs.setFont(fontNormal, 11);
                     y = writeLine(cs, "房租: " + amount(dto.getRentAmount())
                             + " 元   水费: " + amount(dto.getWaterAmount())
                             + " 元   电费: " + amount(dto.getElectricAmount()) + " 元", margin, y);
@@ -178,10 +206,19 @@ public class BillApplicationService {
 
                     // 房屋水电明细
                     y -= 18;
-                    cs.setFont(fontBold, 11);
+                    cs.setFont(fontNormal, 11);
                     y = writeLine(cs, "房屋水电明细:", margin, y);
                     cs.setFont(fontNormal, 10);
                     for (BillDetailDTO.BillHouseItemDTO hi : dto.getHouseItems()) {
+                        if (y < margin + 20) {
+                            // 当前页空间不足，换新页继续输出本账单
+                            cs.close();
+                            page = new PDPage(PDRectangle.A4);
+                            document.addPage(page);
+                            cs = new PDPageContentStream(document, page);
+                            y = page.getMediaBox().getHeight() - margin;
+                            cs.setFont(fontNormal, 10);
+                        }
                         String line = String.format(
                                 "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
                                 hi.getHouseLabel(),
@@ -191,17 +228,22 @@ public class BillApplicationService {
                                 amount(hi.getWaterAmount())
                         );
                         y = writeLine(cs, line, margin, y);
-                        if (y < margin + 60) {
-                            break;
-                        }
                     }
 
                     // 公共场所水电明细
                     y -= 12;
-                    cs.setFont(fontBold, 11);
+                    cs.setFont(fontNormal, 11);
                     y = writeLine(cs, "公共场所水电明细:", margin, y);
                     cs.setFont(fontNormal, 10);
                     for (BillDetailDTO.BillSharedPlaceItemDTO si : dto.getSharedPlaceItems()) {
+                        if (y < margin + 20) {
+                            cs.close();
+                            page = new PDPage(PDRectangle.A4);
+                            document.addPage(page);
+                            cs = new PDPageContentStream(document, page);
+                            y = page.getMediaBox().getHeight() - margin;
+                            cs.setFont(fontNormal, 10);
+                        }
                         String line = String.format(
                                 "  - %s  电量: %s  电费: %s 元  水量: %s  水费: %s 元",
                                 si.getSharedPlaceLabel(),
@@ -211,11 +253,13 @@ public class BillApplicationService {
                                 amount(si.getWaterAmount())
                         );
                         y = writeLine(cs, line, margin, y);
-                        if (y < margin + 40) {
-                            break;
-                        }
                     }
+
+                    // 每条账单之间留一点间距
+                    y -= 24;
                 }
+            } finally {
+                cs.close();
             }
 
             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();

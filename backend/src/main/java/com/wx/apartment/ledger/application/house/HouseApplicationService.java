@@ -79,6 +79,7 @@ public class HouseApplicationService {
                 LocalDateTime.now()
         );
         houseRepository.save(updated);
+        houseMeterRepository.replaceByHouseId(id, cmd.getMeterIds());
     }
 
     public HouseDetailDTO getDetail(Long id) {
