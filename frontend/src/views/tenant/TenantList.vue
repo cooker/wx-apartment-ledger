@@ -22,6 +22,8 @@
               <th>姓名</th>
               <th>手机号</th>
               <th>微信号</th>
+              <th>关联公共场所</th>
+              <th>关联房屋</th>
               <th>备注</th>
               <th>创建时间</th>
               <th>操作</th>
@@ -29,20 +31,23 @@
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7" class="table-empty">加载中...</td>
+              <td colspan="9" class="table-empty">加载中...</td>
             </tr>
             <tr v-else-if="tenants.length === 0">
-              <td colspan="7" class="table-empty">暂无数据</td>
+              <td colspan="9" class="table-empty">暂无数据</td>
             </tr>
             <tr v-else v-for="item in tenants" :key="item.id">
               <td>{{ item.id }}</td>
               <td>{{ item.fullName }}</td>
               <td>{{ item.mobileNumber }}</td>
               <td>{{ item.wechatId || '-' }}</td>
+              <td>{{ formatList(item.sharedPlaceNames) }}</td>
+              <td>{{ formatList(item.houseNames) }}</td>
               <td>{{ item.remarkText || '-' }}</td>
               <td>{{ item.createdAt }}</td>
               <td>
                 <button class="link-button" @click="startEdit(item)">编辑</button>
+                <button class="link-button danger" @click="deleteTenantItem(item)">删除</button>
               </td>
             </tr>
           </tbody>
@@ -68,15 +73,15 @@
             <input v-model="form.fullName" type="text" required maxlength="64" />
           </label>
           <label class="form-item">
-            <span>手机号</span>
-            <input v-model="form.mobileNumber" type="text" required maxlength="32" />
+            <span>手机号 <em class="optional">（选填）</em></span>
+            <input v-model="form.mobileNumber" type="text" maxlength="32" />
           </label>
           <label class="form-item">
-            <span>微信号</span>
+            <span>微信号 <em class="optional">（选填）</em></span>
             <input v-model="form.wechatId" type="text" maxlength="64" />
           </label>
           <label class="form-item">
-            <span>备注</span>
+            <span>备注 <em class="optional">（选填）</em></span>
             <textarea v-model="form.remarkText" maxlength="255" rows="3" />
           </label>
           <div class="form-actions">
@@ -97,6 +102,7 @@ import {
   createTenant,
   updateTenant,
   pageTenants,
+  deleteTenant as deleteTenantApi,
   type TenantDetail,
 } from '@/api';
 
@@ -181,6 +187,23 @@ function resetForm() {
   form.mobileNumber = '';
   form.wechatId = '';
   form.remarkText = '';
+}
+
+function formatList(arr: string[] | undefined): string {
+  if (!arr || arr.length === 0) return '-';
+  return arr.join('、');
+}
+
+async function deleteTenantItem(item: TenantDetail) {
+  if (!confirm(`确认删除租客【${item.fullName}】？`)) return;
+  try {
+    await deleteTenantApi(item.id);
+    await reload();
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { message?: string } }; message?: string };
+    const msg = err.response?.data?.message || err.message || '删除失败';
+    alert(msg);
+  }
 }
 
 onMounted(() => {
@@ -275,6 +298,13 @@ onMounted(() => {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
+}
+
+.form-item .optional {
+  font-style: normal;
+  font-size: 12px;
+  color: #999;
+  font-weight: normal;
 }
 
 .form-item input,

@@ -66,12 +66,14 @@
         <BillCenter v-else-if="currentView === 'bill'" />
       </section>
     </main>
+    <AgentationWrapper />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import TenantList from './views/tenant/TenantList.vue';
+import AgentationWrapper from './components/AgentationWrapper.vue';
 import SharedPlaceList from './views/sharedplace/SharedPlaceList.vue';
 import PriceConfigList from './views/price/PriceConfigList.vue';
 import MeterList from './views/meter/MeterList.vue';

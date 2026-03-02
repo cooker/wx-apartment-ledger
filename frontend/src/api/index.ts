@@ -10,6 +10,10 @@ export interface TenantDetail {
   remarkText?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** 关联的公共场所名称列表 */
+  sharedPlaceNames?: string[];
+  /** 关联的房屋展示列表（当前租客） */
+  houseNames?: string[];
 }
 
 export interface TenantPageResult {
@@ -46,6 +50,10 @@ export function updateTenant(id: number, payload: TenantPayload) {
 
 export function getTenantDetail(id: number) {
   return http.get<TenantDetail>(`/tenants/${id}`);
+}
+
+export function deleteTenant(id: number) {
+  return http.post<void>(`/tenants/${id}/delete`);
 }
 
 // ========== 水电单价配置 ========== //

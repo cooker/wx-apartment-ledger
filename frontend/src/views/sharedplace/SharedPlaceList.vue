@@ -36,7 +36,14 @@
             <tr v-else-if="places.length === 0">
               <td colspan="7" class="table-empty">暂无公共场所</td>
             </tr>
-            <tr v-else v-for="item in places" :key="item.id">
+            <tr
+              v-else
+              v-for="item in places"
+              :key="item.id"
+              :class="{ 'row-selected': editingId === item.id }"
+              class="clickable-row"
+              @click="selectRow(item)"
+            >
               <td>{{ item.id }}</td>
               <td>{{ item.placeName }}</td>
               <td>{{ electricCount(item) }}</td>
@@ -45,11 +52,11 @@
               <td>{{ renderUsage(item.electricUsageThisMonth) }}</td>
               <td>{{ renderUsage(item.waterUsageThisMonth) }}</td>
               <td>{{ item.createdAt || '-' }}</td>
-              <td>
-                <button class="link-button" @click="startEdit(item)">编辑</button>
-                <button class="link-button" @click="openUsageDialog(item)">用量</button>
-                <button class="link-button" @click="openShareDialog(item)">分摊</button>
-                <button class="link-button danger" @click="deletePlace(item)">
+              <td @click.stop>
+                <button class="link-button" @click.stop="startEdit(item)">编辑</button>
+                <button class="link-button" @click.stop="openUsageDialog(item)">用量</button>
+                <button class="link-button" @click.stop="openShareDialog(item)">分摊</button>
+                <button class="link-button danger" @click.stop="deletePlace(item)">
                   删除
                 </button>
               </td>
@@ -163,6 +170,10 @@
             </button>
           </div>
         </form>
+      </div>
+
+      <div v-if="editingId" class="usage-summary-wrapper">
+        <MeterUsageSummary :meters="selectedPlaceMeters" />
       </div>
     </div>
 
@@ -353,7 +364,20 @@
               </div>
             </div>
 
-            <div class="usage-table-wrapper">
+            <div class="usage-chart-wrapper" v-if="selectedUsageMeter">
+              <template v-if="usageLoading">
+                <div class="usage-chart-placeholder">加载中...</div>
+              </template>
+              <template v-else-if="usages.length === 0">
+                <div class="usage-chart-placeholder">暂无用量记录</div>
+              </template>
+              <template v-else>
+                <canvas ref="usageChartCanvas" class="usage-chart-canvas"></canvas>
+              </template>
+            </div>
+
+            <div class="usage-table-wrapper" v-if="selectedUsageMeter && usages.length > 0">
+              <div class="modal-subtitle">用量明细</div>
               <table class="usage-table">
                 <thead>
                   <tr>
@@ -361,23 +385,13 @@
                     <th>月份</th>
                     <th>上月读数</th>
                     <th>本月读数</th>
-                    <th>本月用量</th>
+                    <th>用量</th>
                     <th>单价</th>
                     <th>费用</th>
-                    <th>更新时间</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="usageLoading">
-                    <td colspan="8" class="table-empty">加载中...</td>
-                  </tr>
-                  <tr v-else-if="!selectedUsageMeter">
-                    <td colspan="8" class="table-empty">请先在左侧选择一个计量表</td>
-                  </tr>
-                  <tr v-else-if="usages.length === 0">
-                    <td colspan="8" class="table-empty">暂无用量记录</td>
-                  </tr>
-                  <tr v-else v-for="u in usages" :key="u.id">
+                  <tr v-for="u in sortedUsagesForTable" :key="u.id">
                     <td>{{ u.usageYear }}</td>
                     <td>{{ u.usageMonth }}</td>
                     <td>{{ u.previousReading }}</td>
@@ -385,7 +399,6 @@
                     <td>{{ u.usageValue }}</td>
                     <td>{{ u.unitPrice ?? '-' }}</td>
                     <td>{{ u.totalAmount ?? '-' }}</td>
-                    <td>{{ u.updatedAt || u.createdAt || '-' }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -495,7 +508,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { Chart } from 'chart.js/auto';
 import type {
   SharedPlaceDetail,
   SharedPlacePayload,
@@ -516,6 +530,7 @@ import {
   getSharedPlaceShare,
   saveSharedPlaceShare,
 } from '@/api';
+import MeterUsageSummary from '@/components/MeterUsageSummary.vue';
 
 const places = ref<SharedPlaceDetail[]>([]);
 const loading = ref(false);
@@ -547,6 +562,8 @@ const selectedUsageMeter = ref<MeterDetail | null>(null);
 const usages = ref<MeterUsageDTO[]>([]);
 const usageLoading = ref(false);
 const usageYear = ref<number>(new Date().getFullYear());
+const usageChartCanvas = ref<HTMLCanvasElement | null>(null);
+let usageChartInstance: InstanceType<typeof Chart> | null = null;
 
 // 分摊弹窗相关
 const showShareDialog = ref(false);
@@ -582,8 +599,25 @@ const electricMeters = ref<MeterDetail[]>([]);
 const waterMeters = ref<MeterDetail[]>([]);
 const tenants = ref<TenantDetail[]>([]);
 
+/** 当前选中行（编辑中）的场所关联表计 ID，用于用量展示，不依赖 form 与表计列表加载顺序 */
+const selectedPlaceMeterIds = ref<number[]>([]);
+
 const totalPages = computed(() => {
   return total.value === 0 ? 1 : Math.ceil(total.value / pageSize.value);
+});
+
+const selectedPlaceMeters = computed(() => {
+  const ids = selectedPlaceMeterIds.value;
+  const all = [...electricMeters.value, ...waterMeters.value];
+  return ids
+    .map((id) => all.find((m) => m.id === id))
+    .filter((m): m is MeterDetail => m != null)
+    .map((m) => ({
+      id: m.id,
+      meterCode: m.meterCode,
+      meterKind: m.meterKind,
+      installLocation: m.installLocation,
+    }));
 });
 
 const filteredElectricMeters = computed(() => {
@@ -610,6 +644,14 @@ const filteredTenants = computed(() => {
   return tenants.value.filter((t) => {
     const text = `${t.fullName || ''} ${t.mobileNumber || ''}`.toLowerCase();
     return text.includes(kw);
+  });
+});
+
+const sortedUsagesForTable = computed(() => {
+  const list = [...usages.value];
+  return list.sort((a, b) => {
+    if (a.usageYear !== b.usageYear) return b.usageYear - a.usageYear;
+    return b.usageMonth - a.usageMonth;
   });
 });
 
@@ -643,11 +685,18 @@ function changePage(next: number) {
 
 function startCreate() {
   editingId.value = null;
+  selectedPlaceMeterIds.value = [];
   resetForm();
+}
+
+/** 点击行选中该行并展示用量（与编辑共用同一套状态） */
+function selectRow(item: SharedPlaceDetail) {
+  startEdit(item);
 }
 
 function startEdit(item: SharedPlaceDetail) {
   editingId.value = item.id;
+  selectedPlaceMeterIds.value = [...(item.meterIds || [])];
   form.placeName = item.placeName;
   form.electricMeterIds = (item.meterIds || []).filter((id) =>
     electricMeters.value.some((m) => m.id === id)
@@ -663,6 +712,7 @@ function resetForm() {
   form.electricMeterIds = [];
   form.waterMeterIds = [];
   form.tenantIds = [];
+  if (!editingId.value) selectedPlaceMeterIds.value = [];
 }
 
 function openShareDialog(item: SharedPlaceDetail) {
@@ -743,6 +793,7 @@ async function submit() {
   };
   if (editingId.value) {
     await updateSharedPlace(editingId.value, payload);
+    selectedPlaceMeterIds.value = [...meterIds];
   } else {
     await createSharedPlace(payload);
   }
@@ -794,11 +845,62 @@ function openUsageDialog(place: SharedPlaceDetail) {
 }
 
 function closeUsageDialog() {
+  destroyUsageChart();
   showUsageDialog.value = false;
   usagePlace.value = null;
   usageMeters.value = [];
   selectedUsageMeter.value = null;
   usages.value = [];
+}
+
+function destroyUsageChart() {
+  if (usageChartInstance) {
+    usageChartInstance.destroy();
+    usageChartInstance = null;
+  }
+}
+
+function updateUsageChart() {
+  destroyUsageChart();
+  const list = usages.value;
+  const canvas = usageChartCanvas.value;
+  if (!canvas || !list.length) return;
+  const sorted = [...list].sort((a, b) => {
+    if (a.usageYear !== b.usageYear) return a.usageYear - b.usageYear;
+    return a.usageMonth - b.usageMonth;
+  });
+  const labels = sorted.map(
+    (u) => `${u.usageYear}-${String(u.usageMonth).padStart(2, '0')}`,
+  );
+  const data = sorted.map((u) => (u.usageValue != null ? Number(u.usageValue) : null));
+  const kind = selectedUsageMeter.value?.meterKind === 'ELECTRIC' ? '电' : '水';
+  usageChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: `${kind}表用量`,
+          data,
+          borderColor: selectedUsageMeter.value?.meterKind === 'ELECTRIC' ? '#1677ff' : '#52c41a',
+          backgroundColor: selectedUsageMeter.value?.meterKind === 'ELECTRIC' ? 'rgba(22, 119, 255, 0.1)' : 'rgba(82, 196, 26, 0.1)',
+          fill: true,
+          tension: 0.2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true },
+      },
+      scales: {
+        x: { title: { display: true, text: '月份' } },
+        y: { beginAtZero: true, title: { display: true, text: '用量' } },
+      },
+    },
+  });
 }
 
 function selectUsageMeter(m: MeterDetail) {
@@ -822,6 +924,20 @@ async function reloadUsages() {
     usageLoading.value = false;
   }
 }
+
+watch(
+  () => [showUsageDialog.value, usages.value.length, usageLoading.value] as const,
+  async ([open, , loading]) => {
+    if (!open || loading || usages.value.length === 0) {
+      if (!open) destroyUsageChart();
+      return;
+    }
+    await nextTick();
+    updateUsageChart();
+  },
+);
+
+onBeforeUnmount(() => destroyUsageChart());
 
 function renderMeterSimpleLabel(id: number, kind: 'ELECTRIC' | 'WATER') {
   const list = kind === 'ELECTRIC' ? electricMeters.value : waterMeters.value;
@@ -905,9 +1021,9 @@ async function loadMetersAndTenants() {
   tenants.value = tenantRes.records || [];
 }
 
-onMounted(() => {
-  loadMetersAndTenants();
-  reload();
+onMounted(async () => {
+  await loadMetersAndTenants();
+  await reload();
 });
 </script>
 
@@ -955,6 +1071,14 @@ onMounted(() => {
   background-color: #fafafa;
 }
 
+.shared-table tbody tr.clickable-row {
+  cursor: pointer;
+}
+
+.shared-table tbody tr.row-selected td {
+  background-color: #e6f4ff;
+}
+
 .table-empty {
   text-align: center;
   color: var(--color-text-secondary);
@@ -972,6 +1096,11 @@ onMounted(() => {
 .shared-form-wrapper {
   border-left: 1px solid var(--color-border);
   padding-left: 20px;
+}
+
+.usage-summary-wrapper {
+  grid-column: 1 / -1;
+  margin-top: 20px;
 }
 
 .form-title {
@@ -1127,6 +1256,27 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.usage-chart-wrapper {
+  min-height: 280px;
+  position: relative;
+}
+
+.usage-chart-placeholder {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.usage-chart-canvas {
+  width: 100% !important;
+  height: 280px !important;
 }
 
 .modal-subtitle {
