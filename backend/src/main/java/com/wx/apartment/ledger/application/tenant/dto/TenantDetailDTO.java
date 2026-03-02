@@ -1,6 +1,8 @@
 package com.wx.apartment.ledger.application.tenant.dto;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TenantDetailDTO {
 
@@ -11,6 +13,10 @@ public class TenantDetailDTO {
     private String remarkText;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 关联的公共场所名称列表 */
+    private List<String> sharedPlaceNames = new ArrayList<>();
+    /** 关联的房屋（当前租客）展示列表，如 "A101(xx房)" */
+    private List<String> houseNames = new ArrayList<>();
 
     public Long getId() {
         return id;
@@ -66,6 +72,22 @@ public class TenantDetailDTO {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<String> getSharedPlaceNames() {
+        return sharedPlaceNames;
+    }
+
+    public void setSharedPlaceNames(List<String> sharedPlaceNames) {
+        this.sharedPlaceNames = sharedPlaceNames != null ? sharedPlaceNames : new ArrayList<>();
+    }
+
+    public List<String> getHouseNames() {
+        return houseNames;
+    }
+
+    public void setHouseNames(List<String> houseNames) {
+        this.houseNames = houseNames != null ? houseNames : new ArrayList<>();
     }
 }
 

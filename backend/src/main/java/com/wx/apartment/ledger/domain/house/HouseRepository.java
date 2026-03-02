@@ -13,6 +13,10 @@ public interface HouseRepository {
 
     long countByKeyword(String keyword);
 
+    boolean existsByCurrentTenantId(Long tenantId);
+
+    List<House> findByCurrentTenantId(Long tenantId);
+
     void deleteById(Long id);
 }
 

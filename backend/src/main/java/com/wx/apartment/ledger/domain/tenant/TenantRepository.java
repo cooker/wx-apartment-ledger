@@ -12,5 +12,7 @@ public interface TenantRepository {
     List<Tenant> findPage(String keyword, long offset, long pageSize);
 
     long countByKeyword(String keyword);
+
+    void deleteById(Long id);
 }
 

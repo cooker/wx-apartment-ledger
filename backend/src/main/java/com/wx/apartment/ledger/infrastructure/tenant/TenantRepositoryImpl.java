@@ -65,6 +65,11 @@ public class TenantRepositoryImpl implements TenantRepository {
         return tenantMapper.selectCount(wrapper);
     }
 
+    @Override
+    public void deleteById(Long id) {
+        tenantMapper.deleteById(id);
+    }
+
     private TenantPO toPO(Tenant tenant) {
         TenantPO po = new TenantPO();
         po.setId(tenant.getId());

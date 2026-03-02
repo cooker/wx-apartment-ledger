@@ -43,5 +43,10 @@ public class TenantController {
     public PageResult<TenantDetailDTO> pageQuery(TenantPageQuery query) {
         return tenantApplicationService.pageQuery(query);
     }
+
+    @PostMapping("/{id}/delete")
+    public void deleteTenant(@PathVariable("id") Long id) {
+        tenantApplicationService.deleteTenant(id);
+    }
 }
 

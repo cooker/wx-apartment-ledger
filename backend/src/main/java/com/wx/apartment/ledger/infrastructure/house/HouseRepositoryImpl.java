@@ -55,6 +55,22 @@ public class HouseRepositoryImpl implements HouseRepository {
     }
 
     @Override
+    public boolean existsByCurrentTenantId(Long tenantId) {
+        if (tenantId == null) return false;
+        LambdaQueryWrapper<HousePO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(HousePO::getCurrentTenantId, tenantId);
+        return houseMapper.selectCount(wrapper) > 0;
+    }
+
+    @Override
+    public List<House> findByCurrentTenantId(Long tenantId) {
+        if (tenantId == null) return List.of();
+        LambdaQueryWrapper<HousePO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(HousePO::getCurrentTenantId, tenantId).orderByAsc(HousePO::getHouseCode);
+        return houseMapper.selectList(wrapper).stream().map(this::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
     public void deleteById(Long id) {
         houseMapper.deleteById(id);
     }
